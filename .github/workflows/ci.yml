@@ -76,6 +76,7 @@ jobs:
         with:
           directory: infra/terraform
           framework: terraform
+          output_format: cli
           quiet: true
           soft_fail: false
 
