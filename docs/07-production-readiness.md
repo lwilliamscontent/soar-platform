@@ -26,3 +26,15 @@ The customer must supply Splunk SOAR and Burp endpoint details, licensed API
 features, VirusTotal tier and key, AWS account topology, target Regions, network
 connectivity, identity provider, notification/ticketing systems, data
 classification, and the approved response-action matrix.
+
+## Tracked pre-production gaps
+
+- Implement Lambda artifact signing and enforce a code-signing configuration.
+- Implement provider-aware rotation workflows for Splunk SOAR and VirusTotal
+  credentials; manual rotation is required until then.
+- Reassess Lambda VPC placement when private Splunk connectivity or controlled
+  NAT and inspection egress are available.
+
+The SQS source queue owns retry and dead-letter behavior. A Lambda asynchronous
+invocation DLQ is intentionally not configured because the ingestor uses an SQS
+event-source mapping with partial batch failure reporting.

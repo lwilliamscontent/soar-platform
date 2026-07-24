@@ -1,5 +1,20 @@
 data "aws_caller_identity" "current" {}
 
+data "aws_iam_policy_document" "soar_kms" {
+  statement {
+    sid    = "EnableAccountIAMPolicies"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+}
+
 check "deployment_account" {
   assert {
     condition     = data.aws_caller_identity.current.account_id == var.aws_account_id
@@ -11,6 +26,7 @@ resource "aws_kms_key" "soar" {
   description             = "SOAR queues, logs, and secrets"
   deletion_window_in_days = 30
   enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.soar_kms.json
 }
 
 resource "aws_kms_alias" "soar" {
@@ -18,11 +34,13 @@ resource "aws_kms_alias" "soar" {
   target_key_id = aws_kms_key.soar.key_id
 }
 
+# checkov:skip=CKV2_AWS_57: Splunk token rotation requires a vendor-aware workflow; manual rotation is documented until that workflow exists.
 resource "aws_secretsmanager_secret" "splunk_soar" {
   name       = "soar/${var.environment}/splunk-soar"
   kms_key_id = aws_kms_key.soar.arn
 }
 
+# checkov:skip=CKV2_AWS_57: VirusTotal key rotation requires a provider-aware workflow; manual rotation is documented until that workflow exists.
 resource "aws_secretsmanager_secret" "virustotal" {
   name       = "soar/${var.environment}/virustotal"
   kms_key_id = aws_kms_key.soar.arn
@@ -81,11 +99,19 @@ resource "aws_iam_role_policy" "ingestor" {
         Effect   = "Allow"
         Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/soar-${var.environment}-ingestor:*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"]
+        Resource = "*"
       }
     ]
   })
 }
 
+# checkov:skip=CKV_AWS_117: Public AWS APIs and the vendor HTTPS endpoint require egress; VPC attachment adds no isolation until controlled private egress exists.
+# checkov:skip=CKV_AWS_116: The SQS event source owns retries and already has a redrive DLQ; a Lambda asynchronous-invocation DLQ does not apply.
+# checkov:skip=CKV_AWS_272: Code signing is a tracked pre-production requirement; enforcing it before the signing pipeline exists would block deployments.
 resource "aws_lambda_function" "ingestor" {
   function_name                  = "soar-${var.environment}-ingestor"
   role                           = aws_iam_role.ingestor.arn
@@ -96,6 +122,11 @@ resource "aws_lambda_function" "ingestor" {
   timeout                        = 30
   memory_size                    = 256
   reserved_concurrent_executions = 20
+  kms_key_arn                    = aws_kms_key.soar.arn
+
+  tracing_config {
+    mode = "Active"
+  }
 
   environment {
     variables = {
