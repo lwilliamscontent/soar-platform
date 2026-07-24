@@ -1,6 +1,9 @@
 data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "soar_kms" {
+  #checkov:skip=CKV_AWS_109: The account-root key-policy statement enables IAM delegation; workload access remains constrained by IAM policies.
+  #checkov:skip=CKV_AWS_111: KMS key policies use Resource "*" because the policy is attached to exactly one key.
+  #checkov:skip=CKV_AWS_356: KMS key policies require "*" to mean the key to which this policy is attached, not every account resource.
   statement {
     sid    = "EnableAccountIAMPolicies"
     effect = "Allow"
@@ -34,14 +37,14 @@ resource "aws_kms_alias" "soar" {
   target_key_id = aws_kms_key.soar.key_id
 }
 
-# checkov:skip=CKV2_AWS_57: Splunk token rotation requires a vendor-aware workflow; manual rotation is documented until that workflow exists.
 resource "aws_secretsmanager_secret" "splunk_soar" {
+  #checkov:skip=CKV2_AWS_57: Splunk token rotation requires a vendor-aware workflow; manual rotation is documented until that workflow exists.
   name       = "soar/${var.environment}/splunk-soar"
   kms_key_id = aws_kms_key.soar.arn
 }
 
-# checkov:skip=CKV2_AWS_57: VirusTotal key rotation requires a provider-aware workflow; manual rotation is documented until that workflow exists.
 resource "aws_secretsmanager_secret" "virustotal" {
+  #checkov:skip=CKV2_AWS_57: VirusTotal key rotation requires a provider-aware workflow; manual rotation is documented until that workflow exists.
   name       = "soar/${var.environment}/virustotal"
   kms_key_id = aws_kms_key.soar.arn
 }
@@ -109,10 +112,10 @@ resource "aws_iam_role_policy" "ingestor" {
   })
 }
 
-# checkov:skip=CKV_AWS_117: Public AWS APIs and the vendor HTTPS endpoint require egress; VPC attachment adds no isolation until controlled private egress exists.
-# checkov:skip=CKV_AWS_116: The SQS event source owns retries and already has a redrive DLQ; a Lambda asynchronous-invocation DLQ does not apply.
-# checkov:skip=CKV_AWS_272: Code signing is a tracked pre-production requirement; enforcing it before the signing pipeline exists would block deployments.
 resource "aws_lambda_function" "ingestor" {
+  #checkov:skip=CKV_AWS_117: Public AWS APIs and the vendor HTTPS endpoint require egress; VPC attachment adds no isolation until controlled private egress exists.
+  #checkov:skip=CKV_AWS_116: The SQS event source owns retries and already has a redrive DLQ; a Lambda asynchronous-invocation DLQ does not apply.
+  #checkov:skip=CKV_AWS_272: Code signing is a tracked pre-production requirement; enforcing it before the signing pipeline exists would block deployments.
   function_name                  = "soar-${var.environment}-ingestor"
   role                           = aws_iam_role.ingestor.arn
   runtime                        = "python3.13"
