@@ -1,0 +1,13 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+__pycache__/
+.venv/
+.pytest_cache/
+*.pyc
+dist/
+tfplan
+tfplan.json
+*.db
+playground-data/

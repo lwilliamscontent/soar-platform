@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - run: pip install -r requirements-dev.txt
+      - name: Compile Python sources
+        run: python -m compileall -q services exercises tests
+
+      - name: Validate JSON fixtures and schema
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          paths = [Path("schemas/canonical-finding.schema.json"), *Path("exercises").glob("*.json")]
+          for path in paths:
+              json.loads(path.read_text())
+              print(f"valid JSON: {path}")
+          PY
+
+      - name: Run EX-01 through EX-06 regression suite
+        run: python -m pytest tests/test_playground.py -q
+
+      - name: Run service regression suite
+        run: python -m pytest tests/test_ingestor.py tests/test_responder.py -q
+
+      - name: Validate shell scripts
+        run: |
+          bash -n scripts/package-lambdas.sh
+          bash -n scripts/run-local-exercise.sh
+
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.12.2"
+
+      - run: terraform -chdir=infra/terraform fmt -check -recursive
+      - run: terraform -chdir=infra/terraform init -backend=false
+      - run: terraform -chdir=infra/terraform validate
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/terraform
+          framework: terraform
+          quiet: true
+          soft_fail: false
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  package:
+    needs: [test, terraform, security]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/package-lambdas.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lambda-artifacts-${{ github.sha }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14

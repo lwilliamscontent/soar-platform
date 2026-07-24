@@ -1,0 +1,51 @@
+# Production SOAR Platform
+
+This repository is a deployable reference implementation for a production-grade
+Security Orchestration, Automation, and Response platform centered on Splunk
+SOAR and AWS.
+
+Core integrations:
+
+- Splunk SOAR for cases, approvals, playbooks, evidence, and analyst workflow.
+- AWS Security Hub and GuardDuty for cloud findings.
+- Amazon EventBridge, SQS, Lambda, and Step Functions for durable orchestration.
+- VirusTotal API v3 for indicator enrichment.
+- Burp Suite DAST findings through a vendor-neutral webhook adapter.
+- Amazon KMS and Secrets Manager for encryption and credential handling.
+- Splunk HEC for observability and audit telemetry.
+
+The implementation is intentionally safe by default. It enriches and creates
+cases automatically, but containment actions require an explicit policy match
+and, by default, human approval in Splunk SOAR.
+
+## Repository map
+
+```text
+docs/                 Phase documentation and runbooks (.md)
+infra/terraform/      AWS infrastructure
+services/ingestor/    Finding normalization and SOAR dispatch Lambda
+services/enricher/    VirusTotal enrichment Lambda
+services/responder/   Approved AWS response actions Lambda
+schemas/              Canonical event and response schemas
+tests/                Unit tests
+.github/workflows/     CI validation and approval-gated deployment
+scripts/               Reproducible build helpers
+```
+
+## Quick start
+
+1. Read `docs/00-program-charter.md` through `docs/07-production-readiness.md`.
+2. Copy `infra/terraform/terraform.tfvars.example` to `terraform.tfvars`.
+3. Package each service directory as a Lambda zip or use the CI pipeline.
+4. Run `terraform init`, `terraform plan`, and review the plan.
+5. Configure Splunk SOAR assets, labels, automation user, and approval roles.
+6. Store API credentials in Secrets Manager; never place secrets in Terraform
+   variables, source control, Lambda environment variables, or logs.
+7. Configure GitHub OIDC deployment roles and protected environments as
+   described in `docs/09-cicd.md`.
+
+For hands-on learning, follow the ordered curriculum in
+`docs/13-exercise-roadmap.md`. Complete and document one exercise at a time.
+
+This repository does not include vendor licenses or credentials and cannot
+provision Splunk SOAR, VirusTotal, or Burp subscriptions.

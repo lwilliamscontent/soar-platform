@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/schemas/canonical-finding.schema.json",
+  "title": "Canonical SOAR Finding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "incident_key", "source", "title", "severity", "observed_at"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "incident_key": {"type": "string", "minLength": 16, "maxLength": 128},
+    "source": {"enum": ["aws-securityhub", "aws-guardduty", "burp", "manual", "test"]},
+    "source_id": {"type": "string", "maxLength": 512},
+    "title": {"type": "string", "minLength": 1, "maxLength": 512},
+    "description": {"type": "string", "maxLength": 10000},
+    "severity": {"enum": ["informational", "low", "medium", "high", "critical"]},
+    "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "account_id": {"type": "string", "pattern": "^[0-9]{12}$"},
+    "region": {"type": "string", "maxLength": 32},
+    "resource_arns": {"type": "array", "maxItems": 100, "items": {"type": "string", "maxLength": 2048}},
+    "observables": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "value"],
+        "properties": {
+          "type": {"enum": ["ip", "domain", "url", "sha256", "sha1", "md5", "email"]},
+          "value": {"type": "string", "maxLength": 4096}
+        }
+      }
+    },
+    "labels": {"type": "array", "maxItems": 50, "items": {"type": "string", "maxLength": 64}},
+    "raw_reference": {"type": "string", "maxLength": 2048}
+  }
+}

@@ -1,0 +1,10 @@
+aws_account_id          = "123456789012"
+aws_region               = "us-east-1"
+environment              = "dev"
+lambda_artifact_bucket   = "replace-with-immutable-artifact-bucket"
+ingestor_artifact_key    = "soar/ingestor/replace-with-digest.zip"
+enricher_artifact_key    = "soar/enricher/replace-with-digest.zip"
+responder_artifact_key   = "soar/responder/replace-with-digest.zip"
+allowed_response_accounts = []
+monthly_budget_usd        = 25
+budget_alert_email        = ""

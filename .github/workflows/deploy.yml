@@ -1,0 +1,72 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, staging, prod]
+        required: true
+      artifact_commit:
+        description: Commit SHA whose source will be packaged and deployed
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: soar-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.artifact_commit }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.12.2"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - run: ./scripts/package-lambdas.sh
+
+      - name: Publish immutable artifacts
+        id: artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for service in ingestor enricher responder; do
+            digest="$(sha256sum "dist/${service}.zip" | cut -d ' ' -f 1)"
+            key="soar/${service}/${digest}.zip"
+            aws s3 cp "dist/${service}.zip" "s3://${{ vars.ARTIFACT_BUCKET }}/${key}" --only-show-errors
+            echo "${service}_key=${key}" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Terraform init
+        run: terraform -chdir=infra/terraform init -input=false
+
+      - name: Select environment state
+        run: terraform -chdir=infra/terraform workspace select -or-create ${{ inputs.environment }}
+
+      - name: Terraform plan
+        run: |
+          terraform -chdir=infra/terraform plan -input=false -out=tfplan \
+            -var="aws_account_id=${{ vars.AWS_ACCOUNT_ID }}" \
+            -var="aws_region=${{ vars.AWS_REGION }}" \
+            -var="environment=${{ inputs.environment }}" \
+            -var="lambda_artifact_bucket=${{ vars.ARTIFACT_BUCKET }}" \
+            -var="ingestor_artifact_key=${{ steps.artifacts.outputs.ingestor_key }}" \
+            -var="enricher_artifact_key=${{ steps.artifacts.outputs.enricher_key }}" \
+            -var="responder_artifact_key=${{ steps.artifacts.outputs.responder_key }}"
+
+      - name: Apply reviewed plan
+        run: terraform -chdir=infra/terraform apply -input=false -auto-approve tfplan

@@ -1,0 +1,24 @@
+{
+  "version": "0",
+  "id": "local-exercise-002",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "detail": {
+    "findings": [
+      {
+        "Id": "soar-playground/weak-ip-evidence/002",
+        "Title": "Connection to an IP with conflicting reputation evidence",
+        "Description": "Synthetic finding designed to test analyst rejection of an over-eager response recommendation.",
+        "Severity": {"Label": "MEDIUM"},
+        "Confidence": 40,
+        "AwsAccountId": "589528729991",
+        "Region": "us-east-1",
+        "UpdatedAt": "2026-07-20T13:00:00Z",
+        "Network": {"SourceIpV4": "198.51.100.77"},
+        "Resources": [
+          {"Id": "arn:aws:ec2:us-east-1:589528729991:instance/i-playground002"}
+        ]
+      }
+    ]
+  }
+}

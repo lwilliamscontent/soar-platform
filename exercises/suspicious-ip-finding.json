@@ -1,0 +1,24 @@
+{
+  "version": "0",
+  "id": "local-exercise-001",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "detail": {
+    "findings": [
+      {
+        "Id": "soar-playground/suspicious-ip/001",
+        "Title": "Outbound connection to a known malicious IP",
+        "Description": "Synthetic finding for the local SOAR playground.",
+        "Severity": {"Label": "HIGH"},
+        "Confidence": 90,
+        "AwsAccountId": "589528729991",
+        "Region": "us-east-1",
+        "UpdatedAt": "2026-07-20T12:00:00Z",
+        "Network": {"SourceIpV4": "198.51.100.66"},
+        "Resources": [
+          {"Id": "arn:aws:ec2:us-east-1:589528729991:instance/i-playground001"}
+        ]
+      }
+    ]
+  }
+}
