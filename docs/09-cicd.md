@@ -66,3 +66,6 @@ modify their own trust policy or permissions boundary.
 
 No API provider secret is stored in GitHub. Runtime provider secrets remain in
 AWS Secrets Manager and are populated through an approved operational process.
+
+The initial CI baseline and passing-gate evidence are recorded in
+`docs/14-ci-confirmation.md`.
