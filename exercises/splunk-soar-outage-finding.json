@@ -1,0 +1,24 @@
+{
+  "version": "0",
+  "id": "local-exercise-008",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "detail": {
+    "findings": [
+      {
+        "Id": "soar-playground/splunk-soar-outage/008",
+        "Title": "Suspicious IP while Splunk SOAR is unavailable",
+        "Description": "Synthetic finding for downstream SOAR outage, queueing, and recovery practice.",
+        "Severity": {"Label": "HIGH"},
+        "Confidence": 90,
+        "AwsAccountId": "589528729991",
+        "Region": "us-east-1",
+        "UpdatedAt": "2026-08-03T15:00:00Z",
+        "Network": {"SourceIpV4": "198.51.100.66"},
+        "Resources": [
+          {"Id": "arn:aws:ec2:us-east-1:589528729991:instance/i-playground008"}
+        ]
+      }
+    ]
+  }
+}

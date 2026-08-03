@@ -1,0 +1,29 @@
+{
+  "version": "0",
+  "id": "local-exercise-011",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "detail": {
+    "findings": [
+      {
+        "Id": "soar-playground/compromised-iam-access-key/011",
+        "Title": "Compromised IAM access key suspected",
+        "Description": "Synthetic finding for identity investigation and reversible access-key containment practice.",
+        "Severity": {"Label": "CRITICAL"},
+        "Confidence": 95,
+        "AwsAccountId": "589528729991",
+        "Region": "us-east-1",
+        "UpdatedAt": "2026-08-03T18:00:00Z",
+        "Observables": [
+          {
+            "Type": "AWS_ACCESS_KEY",
+            "Value": "AKIAIOSFODNN7EXAMPLE"
+          }
+        ],
+        "Resources": [
+          {"Id": "arn:aws:iam::589528729991:user/playground-build-user"}
+        ]
+      }
+    ]
+  }
+}

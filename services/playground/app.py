@@ -44,6 +44,69 @@ MOCK_INTELLIGENCE = {
         "reputation": -5,
         "last_analysis_stats": {"malicious": 1, "suspicious": 2, "harmless": 50},
     },
+    "192.0.2.44": {
+        "provider": "mock-virustotal",
+        "verdict": "unavailable",
+        "status": "rate_limited",
+        "reputation": None,
+        "last_analysis_stats": None,
+        "retry_after_seconds": 60,
+        "error": "provider rate limit reached",
+    },
+    "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f": {
+        "provider": "mock-virustotal",
+        "verdict": "malicious",
+        "reputation": -92,
+        "last_analysis_stats": {"malicious": 42, "suspicious": 5, "harmless": 9},
+        "file_type": "Win32 EXE",
+        "popular_threat_classification": "trojan",
+        "names": ["invoice-review.exe", "payload.bin"],
+    },
+    "AKIAIOSFODNN7EXAMPLE": {
+        "provider": "mock-aws-iam-analyzer",
+        "verdict": "compromised",
+        "risk_score": 95,
+        "principal": "arn:aws:iam::589528729991:user/playground-build-user",
+        "user_name": "playground-build-user",
+        "access_key_status": "Active",
+        "anomalies": [
+            "first use from unrecognized ASN",
+            "console login followed by access-key activity",
+            "failed privilege-escalation API calls",
+        ],
+    },
+    "i-0a1b2c3d4e5f67890": {
+        "provider": "mock-aws-ec2-analyzer",
+        "verdict": "exposed",
+        "risk_score": 91,
+        "instance_state": "running",
+        "instance_profile": "playground-web-tier",
+        "public_ip": "203.0.113.80",
+        "subnet_id": "subnet-0a1b2c3d4e5f67890",
+        "security_groups": ["sg-0123456789abcdef0"],
+        "tags": {"Name": "playground-public-web", "Environment": "sandbox"},
+        "exposure": [
+            "SSH open to 0.0.0.0/0",
+            "administrative port 8443 open to 0.0.0.0/0",
+        ],
+    },
+    "burp-issue-sql-injection-checkout-api": {
+        "provider": "mock-burp-suite-enterprise",
+        "verdict": "critical",
+        "risk_score": 98,
+        "issue_type": "SQL injection",
+        "application": "checkout-api",
+        "affected_endpoint": "https://sandbox.shop.local/api/checkout",
+        "affected_parameter": "coupon",
+        "owner": "web-platform-team",
+        "remediation_sla": "24 hours",
+        "evidence": "Synthetic scanner evidence shows a time-based response differential.",
+        "recommended_remediation": [
+            "use parameterized queries",
+            "validate server-side input",
+            "add a regression test before deployment",
+        ],
+    },
 }
 
 
@@ -151,8 +214,42 @@ def normalize_securityhub(event: dict[str, Any]) -> list[dict[str, Any]]:
                     "INVALID_OBSERVABLE", "each observable must be a JSON object"
                 )
             if observable.get("Type") and observable.get("Value"):
+                if not isinstance(observable["Type"], str) or not isinstance(observable["Value"], str):
+                    raise FindingValidationError(
+                        "INVALID_OBSERVABLE", "observable Type and Value must be strings"
+                    )
+                observable_type = observable["Type"].lower()
+                observable_value = observable["Value"]
+                if observable_type in {"sha256", "file_hash"}:
+                    if not re.fullmatch(r"[A-Fa-f0-9]{64}", observable_value):
+                        raise FindingValidationError(
+                            "INVALID_SHA256", "sha256 observables must be 64 hex characters"
+                        )
+                    observable_type = "sha256"
+                    observable_value = observable_value.lower()
+                elif observable_type in {"aws_access_key", "access_key"}:
+                    if not re.fullmatch(r"(A3T[A-Z0-9]|AKIA|ASIA)[A-Z0-9]{16}", observable_value):
+                        raise FindingValidationError(
+                            "INVALID_AWS_ACCESS_KEY",
+                            "AWS access key observables must match the expected key ID shape",
+                        )
+                    observable_type = "aws_access_key"
+                elif observable_type in {"aws_ec2_instance", "ec2_instance", "ec2_instance_id"}:
+                    if not re.fullmatch(r"i-[a-f0-9]{8,17}", observable_value):
+                        raise FindingValidationError(
+                            "INVALID_EC2_INSTANCE_ID",
+                            "EC2 instance observables must match the expected instance ID shape",
+                        )
+                    observable_type = "aws_ec2_instance"
+                elif observable_type in {"burp_issue", "web_vulnerability"}:
+                    if not re.fullmatch(r"burp-issue-[a-z0-9-]{3,120}", observable_value):
+                        raise FindingValidationError(
+                            "INVALID_BURP_ISSUE_ID",
+                            "Burp issue observables must use a safe local issue identifier",
+                        )
+                    observable_type = "burp_issue"
                 observables.append(
-                    {"type": observable["Type"].lower(), "value": observable["Value"]}
+                    {"type": observable_type, "value": observable_value}
                 )
         result.append(
             {
@@ -201,12 +298,125 @@ def enrich(observables: list[dict[str, str]]) -> list[dict[str, Any]]:
     return enriched
 
 
+def enrichment_is_degraded(enrichment: list[dict[str, Any]]) -> bool:
+    return any(item.get("verdict") == "unavailable" for item in enrichment)
+
+
+def propose_response(actionable: dict[str, Any]) -> dict[str, Any]:
+    if actionable["type"] == "burp_issue":
+        return {
+            "action": "route_web_vulnerability_remediation",
+            "target": actionable.get("application", actionable["value"]),
+            "mode": "simulation",
+            "reason": "Mock Burp Suite analysis identified a critical web vulnerability",
+            "rollback": (
+                "Cancel or update the simulated remediation handoff before work begins; "
+                "no application, WAF, or production configuration is changed automatically"
+            ),
+            "owner_routing": {
+                "owner": actionable.get("owner"),
+                "remediation_sla": actionable.get("remediation_sla"),
+                "issue_type": actionable.get("issue_type"),
+                "affected_endpoint": actionable.get("affected_endpoint"),
+                "affected_parameter": actionable.get("affected_parameter"),
+            },
+            "automation_boundary": (
+                "Create a simulated ownership handoff only. Application remediation "
+                "requires developer review, testing, and change management."
+            ),
+        }
+    if actionable["type"] == "aws_ec2_instance":
+        return {
+            "action": "quarantine_ec2_instance",
+            "target": actionable["value"],
+            "mode": "simulation",
+            "reason": "Mock EC2 analysis identified internet-exposed administrative access",
+            "rollback": (
+                f"Restore security groups {', '.join(actionable.get('security_groups', []))} "
+                f"to instance {actionable['value']} only after exposure review and owner approval"
+            ),
+            "containment_plan": {
+                "method": "replace attached security groups with a no-ingress quarantine group",
+                "preserve_instance": True,
+                "preserve_volumes": True,
+                "collect_before_change": ["security-group rules", "VPC flow logs", "instance metadata"],
+            },
+            "pre_change_state": {
+                "instance_state": actionable.get("instance_state"),
+                "public_ip": actionable.get("public_ip"),
+                "subnet_id": actionable.get("subnet_id"),
+                "security_groups": actionable.get("security_groups", []),
+                "instance_profile": actionable.get("instance_profile"),
+            },
+        }
+    if actionable["type"] == "aws_access_key":
+        return {
+            "action": "disable_iam_access_key",
+            "target": actionable["value"],
+            "mode": "simulation",
+            "reason": "Mock IAM analysis classified the access key as compromised",
+            "rollback": f"Restore access key {actionable['value']} to Active only after owner validation and credential rotation",
+            "pre_change_state": {
+                "access_key_status": actionable.get("access_key_status"),
+                "principal": actionable.get("principal"),
+                "user_name": actionable.get("user_name"),
+            },
+        }
+    if actionable["type"] == "sha256":
+        return {
+            "action": "quarantine_host_collect_file",
+            "target": actionable["value"],
+            "mode": "simulation",
+            "reason": "Mock intelligence classified the file hash as malicious",
+            "rollback": "Release the host from quarantine after evidence review",
+            "evidence_handling": "Preserve file path, hash, host ID, user, and timestamps before remediation",
+        }
+    return {
+        "action": "block_ip",
+        "target": actionable["value"],
+        "mode": "simulation",
+        "reason": f"Mock intelligence classified the observable as {actionable['verdict']}",
+        "rollback": f"Remove temporary block for {actionable['value']}",
+    }
+
+
+def verification_message(action: dict[str, Any]) -> str:
+    if action["action"] == "route_web_vulnerability_remediation":
+        return (
+            "Mock AppSec workflow reports the critical issue assigned to the web-platform-team "
+            "with a 24-hour remediation SLA; no application change was automated"
+        )
+    if action["action"] == "quarantine_ec2_instance":
+        return "Mock EC2 control reports the instance is attached to the no-ingress quarantine security group"
+    if action["action"] == "disable_iam_access_key":
+        return "Mock IAM control reports the access key status as Inactive"
+    if action["action"] == "quarantine_host_collect_file":
+        return "Mock endpoint control reports the host quarantine and evidence collection task as queued"
+    return "Mock control reports the temporary block as active"
+
+
+def rollback_verification_message(action: dict[str, Any]) -> str:
+    if action["action"] == "quarantine_ec2_instance":
+        return "Mock EC2 control reports the original security groups restored to the instance"
+    if action["action"] == "disable_iam_access_key":
+        return "Mock IAM control reports the access key restored to its recorded pre-change status"
+    if action["action"] == "quarantine_host_collect_file":
+        return "Mock endpoint control reports the host released from quarantine after evidence review"
+    if action["action"] == "route_web_vulnerability_remediation":
+        return "Mock AppSec workflow reports the simulated remediation handoff cancelled or updated"
+    return "Mock control reports the temporary IP block removed"
+
+
+def splunk_soar_handoff_available(finding: dict[str, Any]) -> bool:
+    return "/splunk-soar-outage/" not in finding["source_id"]
+
+
 class Store:
     def __init__(self, path: str) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(path, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         with self.connection:
             self.connection.executescript(
                 """
@@ -222,6 +432,7 @@ class Store:
                     proposed_action_json TEXT,
                     approval_json TEXT,
                     execution_json TEXT,
+                    rollback_json TEXT,
                     duplicate_count INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -234,8 +445,34 @@ class Store:
                     detail_json TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS handoff_queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    case_id TEXT NOT NULL,
+                    destination TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    last_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS dead_letter_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    error_code TEXT NOT NULL,
+                    error_message TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    redrive_case_id TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
+            columns = {
+                row["name"] for row in self.connection.execute("PRAGMA table_info(cases)")
+            }
+            if "rollback_json" not in columns:
+                self.connection.execute("ALTER TABLE cases ADD COLUMN rollback_json TEXT")
 
     def audit(self, case_id: str, event_type: str, actor: str, detail: dict[str, Any]) -> None:
         self.connection.execute(
@@ -259,19 +496,24 @@ class Store:
             case_id = str(uuid.uuid4())
             intelligence = enrich(finding.get("observables", []))
             actionable = next(
-                (item for item in intelligence if item["verdict"] in {"malicious", "suspicious"}),
+                (
+                    item
+                    for item in intelligence
+                    if item["verdict"] in {
+                        "malicious",
+                        "suspicious",
+                        "compromised",
+                        "exposed",
+                        "critical",
+                    }
+                ),
                 None,
             )
+            degraded = enrichment_is_degraded(intelligence)
             proposed = None
             status = "investigating"
-            if actionable:
-                proposed = {
-                    "action": "block_ip",
-                    "target": actionable["value"],
-                    "mode": "simulation",
-                    "reason": f"Mock intelligence classified the observable as {actionable['verdict']}",
-                    "rollback": f"Remove temporary block for {actionable['value']}",
-                }
+            if actionable and not degraded:
+                proposed = propose_response(actionable)
                 status = "awaiting_approval"
             timestamp = now()
             self.connection.execute(
@@ -294,10 +536,158 @@ class Store:
                 ),
             )
             self.audit(case_id, "case_created", "system", {"incident_key": finding["incident_key"]})
-            self.audit(case_id, "enrichment_completed", "mock-virustotal", {"results": intelligence})
+            enrichment_actor = (
+                intelligence[0].get("provider", "mock-enrichment")
+                if intelligence
+                else "mock-enrichment"
+            )
+            if degraded:
+                self.audit(
+                    case_id,
+                    "enrichment_degraded",
+                    enrichment_actor,
+                    {
+                        "results": intelligence,
+                        "handling": "case remains investigating until enrichment recovers or evidence is corroborated",
+                    },
+                )
+            else:
+                self.audit(case_id, "enrichment_completed", enrichment_actor, {"results": intelligence})
             if proposed:
                 self.audit(case_id, "response_proposed", "policy-engine", proposed)
+            self.sync_case_to_splunk_soar(case_id, finding)
             return self.get_case(case_id), True
+
+    def sync_case_to_splunk_soar(self, case_id: str, finding: dict[str, Any]) -> None:
+        if splunk_soar_handoff_available(finding):
+            return
+        timestamp = now()
+        self.connection.execute(
+            """INSERT INTO handoff_queue(
+                case_id,destination,status,attempts,last_error,created_at,updated_at
+            ) VALUES(?,?,?,?,?,?,?)""",
+            (
+                case_id,
+                "mock-splunk-soar",
+                "queued",
+                1,
+                "mock Splunk SOAR API unavailable",
+                timestamp,
+                timestamp,
+            ),
+        )
+        self.audit(
+            case_id,
+            "splunk_soar_handoff_queued",
+            "handoff-worker",
+            {
+                "destination": "mock-splunk-soar",
+                "reason": "mock Splunk SOAR API unavailable",
+                "next_step": "retry when downstream service recovers",
+            },
+        )
+
+    def retry_splunk_soar_handoffs(self, actor: str) -> list[dict[str, Any]]:
+        with self.lock, self.connection:
+            queued = self.connection.execute(
+                "SELECT * FROM handoff_queue WHERE destination=? AND status=? ORDER BY id",
+                ("mock-splunk-soar", "queued"),
+            ).fetchall()
+            delivered = []
+            for row in queued:
+                timestamp = now()
+                self.connection.execute(
+                    """UPDATE handoff_queue
+                    SET status='delivered',attempts=attempts+1,last_error=NULL,updated_at=?
+                    WHERE id=?""",
+                    (timestamp, row["id"]),
+                )
+                detail = {
+                    "destination": row["destination"],
+                    "previous_attempts": row["attempts"],
+                    "status": "delivered",
+                }
+                self.audit(row["case_id"], "splunk_soar_handoff_delivered", actor, detail)
+                delivered.append(self.get_case(row["case_id"]))
+            return delivered
+
+    def capture_dead_letter(
+        self,
+        source: str,
+        payload: dict[str, Any],
+        error_code: str,
+        error_message: str,
+    ) -> dict[str, Any]:
+        timestamp = now()
+        with self.lock, self.connection:
+            cursor = self.connection.execute(
+                """INSERT INTO dead_letter_events(
+                    source,status,error_code,error_message,payload_json,created_at,updated_at
+                ) VALUES(?,?,?,?,?,?,?)""",
+                (
+                    source,
+                    "open",
+                    error_code,
+                    error_message,
+                    json.dumps(payload),
+                    timestamp,
+                    timestamp,
+                ),
+            )
+            return self.get_dead_letter_event(cursor.lastrowid)
+
+    def list_dead_letter_events(self) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            "SELECT id FROM dead_letter_events ORDER BY id"
+        ).fetchall()
+        return [self.get_dead_letter_event(row["id"]) for row in rows]
+
+    def get_dead_letter_event(self, event_id: int) -> dict[str, Any]:
+        row = self.connection.execute(
+            "SELECT * FROM dead_letter_events WHERE id=?", (event_id,)
+        ).fetchone()
+        if not row:
+            raise KeyError("dead-letter event not found")
+        return {
+            "id": row["id"],
+            "source": row["source"],
+            "status": row["status"],
+            "error_code": row["error_code"],
+            "error_message": row["error_message"],
+            "payload": json.loads(row["payload_json"]),
+            "redrive_case_id": row["redrive_case_id"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def redrive_dead_letter_event(
+        self, event_id: int, corrected_payload: dict[str, Any], actor: str
+    ) -> list[dict[str, Any]]:
+        with self.lock, self.connection:
+            event = self.get_dead_letter_event(event_id)
+            if event["status"] != "open":
+                raise ValueError(f"dead-letter event cannot be redriven from status {event['status']}")
+            findings = normalize_securityhub(corrected_payload)
+            cases = []
+            for finding in findings:
+                case, _created = self.ingest(finding)
+                cases.append(case)
+            case_id = cases[0]["id"] if cases else None
+            timestamp = now()
+            self.connection.execute(
+                """UPDATE dead_letter_events
+                SET status='redriven',payload_json=?,redrive_case_id=?,updated_at=?
+                WHERE id=?""",
+                (json.dumps(corrected_payload), case_id, timestamp, event_id),
+            )
+            for case in cases:
+                self.audit(
+                    case["id"],
+                    "dead_letter_redriven",
+                    actor,
+                    {"dead_letter_id": event_id, "source": event["source"]},
+                )
+            return [self.get_case(case["id"]) for case in cases]
 
     def approve(self, case_id: str, actor: str, decision: str, note: str) -> dict[str, Any]:
         if decision not in {"approved", "rejected"}:
@@ -350,7 +740,7 @@ class Store:
                 "target": action["target"],
                 "executed_by": actor,
                 "executed_at": now(),
-                "verification": "Mock control reports the temporary block as active",
+                "verification": verification_message(action),
                 "rollback": action["rollback"],
             }
             with self.connection:
@@ -362,6 +752,41 @@ class Store:
                 self.audit(case_id, "response_verified", "verification-engine", {"result": "pass"})
             return self.get_case(case_id)
 
+    def rollback(self, case_id: str, actor: str, rationale: str) -> dict[str, Any]:
+        if len(rationale.strip()) < 15:
+            raise ValueError("rollback rationale must contain at least 15 characters")
+        with self.lock, self.connection:
+            case = self.get_case(case_id)
+            if case["status"] != "contained" or not case["execution"]:
+                raise ValueError("only a contained case with an executed response can be rolled back")
+            if case["rollback"]:
+                raise ValueError("case response has already been rolled back")
+            action = case["proposed_action"]
+            if action.get("mode") != "simulation":
+                raise PermissionError("local playground permits simulation-only rollback")
+            rollback = {
+                "status": "simulated",
+                "action": f"rollback_{action['action']}",
+                "target": action["target"],
+                "rolled_back_by": actor,
+                "rolled_back_at": now(),
+                "rationale": rationale,
+                "instructions": action["rollback"],
+                "verification": rollback_verification_message(action),
+            }
+            self.connection.execute(
+                "UPDATE cases SET rollback_json=?,status='rolled_back',updated_at=? WHERE id=?",
+                (json.dumps(rollback), now(), case_id),
+            )
+            self.audit(case_id, "response_rolled_back", actor, rollback)
+            self.audit(
+                case_id,
+                "response_rollback_verified",
+                "verification-engine",
+                {"result": "pass", "verification": rollback["verification"]},
+            )
+            return self.get_case(case_id)
+
     def close(self, case_id: str, actor: str, resolution: str) -> dict[str, Any]:
         with self.lock, self.connection:
             case = self.get_case(case_id)
@@ -370,6 +795,7 @@ class Store:
                 "rejected",
                 "investigating",
                 "awaiting_approval",
+                "rolled_back",
             }:
                 raise ValueError(f"case cannot be closed from status {case['status']}")
             self.connection.execute(
@@ -412,6 +838,11 @@ class Store:
             "SELECT event_type,actor,detail_json,created_at FROM audit_events WHERE case_id=? ORDER BY id",
             (case_id,),
         ).fetchall()
+        handoffs = self.connection.execute(
+            """SELECT destination,status,attempts,last_error,created_at,updated_at
+            FROM handoff_queue WHERE case_id=? ORDER BY id""",
+            (case_id,),
+        ).fetchall()
         return {
             "id": row["id"],
             "incident_key": row["incident_key"],
@@ -424,6 +855,7 @@ class Store:
             "proposed_action": json.loads(row["proposed_action_json"]) if row["proposed_action_json"] else None,
             "approval": json.loads(row["approval_json"]) if row["approval_json"] else None,
             "execution": json.loads(row["execution_json"]) if row["execution_json"] else None,
+            "rollback": json.loads(row["rollback_json"]) if row["rollback_json"] else None,
             "duplicate_count": row["duplicate_count"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
@@ -431,6 +863,7 @@ class Store:
                 {"event_type": item["event_type"], "actor": item["actor"], "detail": json.loads(item["detail_json"]), "created_at": item["created_at"]}
                 for item in audits
             ],
+            "handoffs": [dict(item) for item in handoffs],
         }
 
 

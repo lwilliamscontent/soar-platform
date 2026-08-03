@@ -1,0 +1,24 @@
+{
+  "version": "0",
+  "id": "local-exercise-007",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "detail": {
+    "findings": [
+      {
+        "Id": "soar-playground/provider-rate-limit/007",
+        "Title": "Outbound connection requires threat-intelligence enrichment",
+        "Description": "Synthetic finding for provider timeout and rate-limit degraded-mode practice.",
+        "Severity": {"Label": "HIGH"},
+        "Confidence": 80,
+        "AwsAccountId": "589528729991",
+        "Region": "us-east-1",
+        "UpdatedAt": "2026-08-03T14:00:00Z",
+        "Network": {"SourceIpV4": "192.0.2.44"},
+        "Resources": [
+          {"Id": "arn:aws:ec2:us-east-1:589528729991:instance/i-playground007"}
+        ]
+      }
+    ]
+  }
+}

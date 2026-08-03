@@ -11,3 +11,7 @@ tfplan
 tfplan.json
 *.db
 playground-data/
+
+# Local instructional material; intentionally excluded from the remote repository.
+/docs/*.md
+/exercises/results/*.md

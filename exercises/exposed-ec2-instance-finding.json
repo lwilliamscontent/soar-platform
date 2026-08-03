@@ -1,0 +1,29 @@
+{
+  "version": "0",
+  "id": "local-exercise-012",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "detail": {
+    "findings": [
+      {
+        "Id": "soar-playground/exposed-ec2-instance/012",
+        "Title": "EC2 instance exposes administrative access to the internet",
+        "Description": "Synthetic finding for cloud-resource triage and reversible quarantine planning practice.",
+        "Severity": {"Label": "CRITICAL"},
+        "Confidence": 91,
+        "AwsAccountId": "589528729991",
+        "Region": "us-east-1",
+        "UpdatedAt": "2026-08-03T19:00:00Z",
+        "Observables": [
+          {
+            "Type": "AWS_EC2_INSTANCE",
+            "Value": "i-0a1b2c3d4e5f67890"
+          }
+        ],
+        "Resources": [
+          {"Id": "arn:aws:ec2:us-east-1:589528729991:instance/i-0a1b2c3d4e5f67890"}
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "version": "0",
+  "id": "local-exercise-010",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "detail": {
+    "findings": [
+      {
+        "Id": "soar-playground/malicious-file-hash/010",
+        "Title": "Malicious file hash detected on endpoint",
+        "Description": "Synthetic finding for malicious file-hash investigation and evidence-handling practice.",
+        "Severity": {"Label": "HIGH"},
+        "Confidence": 92,
+        "AwsAccountId": "589528729991",
+        "Region": "us-east-1",
+        "UpdatedAt": "2026-08-03T17:00:00Z",
+        "Observables": [
+          {
+            "Type": "SHA256",
+            "Value": "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
+          }
+        ],
+        "Resources": [
+          {"Id": "arn:aws:ec2:us-east-1:589528729991:instance/i-playground010"}
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "version": "0",
+  "id": "local-exercise-009-invalid",
+  "detail-type": "Security Hub Findings - Imported",
+  "source": "aws.securityhub",
+  "detail": {
+    "findings": [
+      {
+        "Title": "Malformed Security Hub finding for DLQ practice",
+        "Description": "Synthetic malformed finding. The Id field is intentionally missing.",
+        "Severity": {"Label": "HIGH"},
+        "Confidence": 85,
+        "AwsAccountId": "589528729991",
+        "Region": "us-east-1",
+        "UpdatedAt": "2026-08-03T16:00:00Z",
+        "Network": {"SourceIpV4": "198.51.100.66"},
+        "Resources": [
+          {"Id": "arn:aws:ec2:us-east-1:589528729991:instance/i-playground009"}
+        ]
+      }
+    ]
+  }
+}
